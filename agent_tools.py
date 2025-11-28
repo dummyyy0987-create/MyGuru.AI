@@ -29,22 +29,43 @@ class ConfluenceSearchTool(BaseTool):
     def _run(self, query: str) -> str:
         """Search Confluence documentation"""
         try:
+            logger.info(f"Confluence Tool searching for: '{query}'")
             if not self.vector_store:
                 return "Confluence search is not available. Vector store not initialized."
             
             # Search using vector store
             results = self.vector_store.search(query, k=5)
+            logger.info(f"Confluence Tool found {len(results)} results")
             
             if not results:
+                logger.info("Confluence Tool: No results found")
                 return "No relevant information found in Confluence documentation."
             
-            # Format results
-            output = "Found the following relevant Confluence documentation:\n\n"
+            # Extract GitHub URLs from all results
+            from vector_store import extract_github_urls
+            all_github_urls = []
+            for result in results:
+                github_urls = extract_github_urls(result['text'])
+                all_github_urls.extend(github_urls)
+            all_github_urls = list(set(all_github_urls))  # Remove duplicates
+            
+            # Log all results with their relevance scores
+            for i, result in enumerate(results, 1):
+                logger.info(f"Result {i}: {result['title']} (space: {result['space']}, relevance: {result['relevance_score']:.2%})")
+                logger.info(f"  Content preview: {result['text'][:200]}...")
+            
+            # Format results with content and GitHub links
+            output = "Confluence Documentation:\n\n"
             for i, result in enumerate(results[:3], 1):
-                output += f"{i}. **{result['title']}** ({result['type']} in {result['space']})\n"
-                output += f"   Content: {result['text'][:300]}...\n"
-                output += f"   URL: {result['url']}\n"
-                output += f"   Relevance: {result['relevance_score']:.2%}\n\n"
+                output += f"{i}. **{result['title']}**\n"
+                output += f"   {result['text'][:500]}\n"
+                output += f"   Source: {result['url']}\n\n"
+            
+            # Add GitHub links if found
+            if all_github_urls:
+                output += "\n**GitHub Repositories mentioned:**\n"
+                for url in all_github_urls[:5]:
+                    output += f"- {url}\n"
             
             return output
             
