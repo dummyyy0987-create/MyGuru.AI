@@ -1,0 +1,13 @@
+streamlit>=1.29.0
+openai>=1.6.1
+faiss-cpu>=1.9.0
+atlassian-python-api>=3.41.0
+python-dotenv>=1.0.0
+pypdf2>=3.0.1
+requests>=2.31.0
+numpy>=1.24.3
+tiktoken>=0.5.2
+langchain>=0.1.0
+langchain-community>=0.0.20
+langchain-openai>=0.0.5
+PyGithub>=2.1.1
