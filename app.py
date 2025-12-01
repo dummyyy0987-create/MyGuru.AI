@@ -1,6 +1,6 @@
 import streamlit as st
 from langchain_openai import AzureChatOpenAI
-from langchain.memory import ConversationBufferMemory
+from langchain_classic.memory import ConversationBufferMemory
 from config import Config
 from vector_store import VectorStore, extract_github_urls
 from github_search import GitHubSearcher

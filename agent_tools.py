@@ -1,5 +1,5 @@
-from langchain.agents import Tool
-from langchain.tools import BaseTool
+from langchain_classic.agents import Tool
+from langchain_core.tools import BaseTool
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
 import logging

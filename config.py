@@ -37,7 +37,7 @@ class Config:
     
     # Vector Store Configuration
     VECTOR_STORE_PATH = "vector_store"
-    FAISS_INDEX_PATH = os.path.join(VECTOR_STORE_PATH, "confluence_index.faiss")
+    FAISS_INDEX_PATH = os.path.join(VECTOR_STORE_PATH, "index.faiss")
     METADATA_PATH = os.path.join(VECTOR_STORE_PATH, "metadata.pkl")
     
     @classmethod

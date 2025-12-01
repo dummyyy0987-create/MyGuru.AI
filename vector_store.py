@@ -3,7 +3,7 @@ import pickle
 from typing import List, Dict
 from langchain_openai import AzureOpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 import logging
 import re
 
