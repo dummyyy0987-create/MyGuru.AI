@@ -11,3 +11,4 @@ langchain>=0.1.0
 langchain-community>=0.0.20
 langchain-openai>=0.0.5
 PyGithub>=2.1.1
+pyodbc>=5.0.0

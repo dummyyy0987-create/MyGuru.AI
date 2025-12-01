@@ -4,6 +4,12 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Set ODBC environment variables if they exist in .env
+if os.getenv("ODBCSYSINI"):
+    os.environ["ODBCSYSINI"] = os.getenv("ODBCSYSINI")
+if os.getenv("ODBCINI"):
+    os.environ["ODBCINI"] = os.getenv("ODBCINI")
+
 class Config:
     """Configuration class for Azure OpenAI and Confluence"""
     
@@ -22,6 +28,12 @@ class Config:
     # GitHub Configuration (Optional)
     GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
     GITHUB_ORGANIZATION = os.getenv("GITHUB_ORGANIZATION")  # Optional: limit to specific org
+    
+    # Azure SQL Database Configuration (Optional)
+    AZURE_SQL_SERVER = os.getenv("AZURE_SQL_SERVER")  # e.g., 'myserver.database.windows.net'
+    AZURE_SQL_DATABASE = os.getenv("AZURE_SQL_DATABASE")
+    AZURE_SQL_USERNAME = os.getenv("AZURE_SQL_USERNAME")
+    AZURE_SQL_PASSWORD = os.getenv("AZURE_SQL_PASSWORD")
     
     # Vector Store Configuration
     VECTOR_STORE_PATH = "vector_store"

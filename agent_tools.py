@@ -137,6 +137,48 @@ class GitHubSearchTool(BaseTool):
         return self._run(query)
 
 
+class DatabaseSearchInput(BaseModel):
+    """Input for database search tool"""
+    sql_query: str = Field(description="SQL SELECT query to execute on the Azure SQL database")
+
+
+class DatabaseSearchTool(BaseTool):
+    """Tool for searching Azure SQL Database"""
+    name: str = "database_search"
+    description: str = """Useful for querying structured data from Azure SQL Database.
+    Use this tool when the user asks about:
+    - Structured data, records, or database information
+    - Specific data queries that need SQL
+    - Information not found in documentation or code
+    
+    Input should be a valid SQL SELECT query. The tool will execute it and return results.
+    The database schema will be provided to help you construct queries."""
+    args_schema: type[BaseModel] = DatabaseSearchInput
+    database_searcher: object = None
+    schema_info: str = ""
+    
+    def _run(self, sql_query: str) -> str:
+        """Execute SQL query on database"""
+        try:
+            logger.info(f"Database Tool executing query: {sql_query[:100]}...")
+            if not self.database_searcher:
+                return "Database search is not available. Please configure Azure SQL Database credentials."
+            
+            # Execute query
+            result = self.database_searcher.search(sql_query)
+            logger.info(f"Database query completed")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in database search: {e}")
+            return f"Error querying database: {str(e)}"
+    
+    async def _arun(self, sql_query: str) -> str:
+        """Async version"""
+        return self._run(sql_query)
+
+
 def create_confluence_tool(vector_store) -> ConfluenceSearchTool:
     """Create Confluence search tool with vector store"""
     return ConfluenceSearchTool(vector_store=vector_store)
@@ -145,3 +187,17 @@ def create_confluence_tool(vector_store) -> ConfluenceSearchTool:
 def create_github_tool(github_searcher) -> GitHubSearchTool:
     """Create GitHub search tool with searcher"""
     return GitHubSearchTool(github_searcher=github_searcher)
+
+
+def create_database_tool(database_searcher):
+    """Create database search tool with searcher"""
+    try:
+        schema_info = database_searcher.get_schema_info() if database_searcher else ""
+        return DatabaseSearchTool(
+            database_searcher=database_searcher,
+            schema_info=schema_info
+        )
+    except Exception as e:
+        logger.error(f"Error creating database tool: {e}")
+        return None
+

@@ -4,8 +4,28 @@ from langchain.memory import ConversationBufferMemory
 from config import Config
 from vector_store import VectorStore, extract_github_urls
 from github_search import GitHubSearcher
+
+# Optional database import
+try:
+    from database_search import DatabaseSearcher
+    DATABASE_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Database module not available: {e}")
+    DATABASE_AVAILABLE = False
+    DatabaseSearcher = None
+
 from agent_tools import create_confluence_tool, create_github_tool
+try:
+    from agent_tools import create_database_tool
+except ImportError:
+    create_database_tool = None
+
 from agents import create_confluence_agent, create_github_agent, create_supervisor_agent
+try:
+    from agents import create_database_agent
+except ImportError:
+    create_database_agent = None
+
 import os
 import logging
 import asyncio
@@ -141,7 +161,7 @@ def initialize_vector_store():
         return None
 
 
-def initialize_agents(llm, vector_store, github_searcher):
+def initialize_agents(llm, vector_store, github_searcher, database_searcher):
     """Initialize multi-agent system"""
     try:
         # Create tools
@@ -154,6 +174,11 @@ def initialize_agents(llm, vector_store, github_searcher):
         )
         
         github_memory = ConversationBufferMemory(
+            memory_key="chat_history",
+            return_messages=True
+        )
+        
+        database_memory = ConversationBufferMemory(
             memory_key="chat_history",
             return_messages=True
         )
@@ -171,16 +196,23 @@ def initialize_agents(llm, vector_store, github_searcher):
             github_tool = create_github_tool(github_searcher)
             github_agent = create_github_agent(llm, github_tool, github_memory)
         
+        database_agent = None
+        if database_searcher and create_database_tool and create_database_agent:
+            database_tool = create_database_tool(database_searcher)
+            database_agent = create_database_agent(llm, database_tool, database_memory)
+        
         # Create supervisor
-        supervisor = create_supervisor_agent(llm, confluence_agent, github_agent, supervisor_memory)
+        supervisor = create_supervisor_agent(llm, confluence_agent, github_agent, database_agent, supervisor_memory)
         
         return {
             'supervisor': supervisor,
             'confluence_agent': confluence_agent,
             'github_agent': github_agent,
+            'database_agent': database_agent,
             'memories': {
                 'confluence': confluence_memory,
                 'github': github_memory,
+                'database': database_memory,
                 'supervisor': supervisor_memory
             }
         }
@@ -231,12 +263,40 @@ def main():
             logger.info("No GitHub token provided - GitHub search disabled")
             st.session_state.github_searcher = None
     
+    # Initialize Database searcher
+    if 'database_searcher' not in st.session_state:
+        if not DATABASE_AVAILABLE:
+            logger.info("Database module not available - Database search disabled")
+            st.session_state.database_searcher = None
+        else:
+            db_server = Config.AZURE_SQL_SERVER
+            db_database = Config.AZURE_SQL_DATABASE
+            db_username = Config.AZURE_SQL_USERNAME
+            db_password = Config.AZURE_SQL_PASSWORD
+            
+            if db_server and db_database and db_username and db_password:
+                try:
+                    st.session_state.database_searcher = DatabaseSearcher(
+                        server=db_server,
+                        database=db_database,
+                        username=db_username,
+                        password=db_password
+                    )
+                    logger.info("Database searcher initialized successfully")
+                except Exception as e:
+                    logger.warning(f"Database searcher initialization failed: {e}")
+                    st.session_state.database_searcher = None
+            else:
+                logger.info("No database credentials provided - Database search disabled")
+                st.session_state.database_searcher = None
+    
     # Initialize multi-agent system
     if 'agents' not in st.session_state and st.session_state.vector_store and st.session_state.llm:
         st.session_state.agents = initialize_agents(
             st.session_state.llm,
             st.session_state.vector_store,
-            st.session_state.github_searcher
+            st.session_state.github_searcher,
+            st.session_state.database_searcher
         )
     
     # Check if initialization was successful
@@ -329,12 +389,13 @@ def main():
                 # Use supervisor agent to coordinate search
                 supervisor = st.session_state.agents['supervisor']
                 
-                # Run supervisor (it will coordinate Confluence and GitHub agents)
+                # Run supervisor (it will coordinate Confluence, GitHub, and Database agents)
                 result = asyncio.run(supervisor(query))
                 
                 response = result.get('answer', 'No answer generated.')
                 confluence_used = result.get('confluence_used', False)
                 github_used = result.get('github_used', False)
+                database_used = result.get('database_used', False)
                 
                 # Extract sources and GitHub links from response
                 sources = []
@@ -347,6 +408,8 @@ def main():
                     agent_info.append("📚 Confluence Agent")
                 if github_used:
                     agent_info.append("🐙 GitHub Agent")
+                if database_used:
+                    agent_info.append("💾 Database Agent")
                 
                 if agent_info:
                     response = f"*Consulted: {', '.join(agent_info)}*\n\n{response}"
