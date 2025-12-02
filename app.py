@@ -10,7 +10,6 @@ try:
     from database_search import DatabaseSearcher
     DATABASE_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"Database module not available: {e}")
     DATABASE_AVAILABLE = False
     DatabaseSearcher = None
 
@@ -34,95 +33,120 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# Page configuration
 st.set_page_config(
     page_title="AI Assistant",
-    page_icon="🤖",
-    layout="wide"
+    page_icon="💬",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items=None
 )
 
-# Custom CSS for better styling
+# Minimal CSS - only dark theme colors
 st.markdown("""
-    <style>
-    /* Hide deploy button and hamburger menu */
-    [data-testid="stToolbar"] {
-        display: none;
+<style>
+    .stApp {
+        background-color: #343541;
     }
     
-    .main {
-        background-color: #f5f7f9;
+    .stChatMessage {
+        background-color: #444654;
     }
-    .stTextInput > div > div > input {
-        font-size: 16px;
-        color: #000000 !important;
-        -webkit-text-fill-color: #000000 !important;
+    
+    /* Sidebar dark theme */
+    [data-testid="stSidebar"] {
+        background-color: #2c2c3a !important;
     }
-    .stTextInput input {
-        color: #000000 !important;
+    
+    [data-testid="stSidebar"] * {
+        color: #ffffff !important;
     }
-    input[type="text"] {
-        color: #000000 !important;
+    
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] li {
+        color: #ffffff !important;
     }
-    .chat-message {
-        padding: 1.5rem;
-        border-radius: 0.5rem;
-        margin-bottom: 1rem;
-        display: flex;
-        flex-direction: column;
-        color: #1a1a1a;
+    
+    /* Sidebar button styling */
+    [data-testid="stSidebar"] .stButton button {
+        background-color: #2c2c3a !important;
+        color: #ffffff !important;
+        border: 1px solid #4a4a5a !important;
     }
-    .user-message {
-        background-color: #e3f2fd;
-        border-left: 4px solid #2196f3;
-        color: #0d47a1;
+    
+    [data-testid="stSidebar"] .stButton button:hover {
+        background-color: #3a3a4a !important;
+        border: 1px solid #5a5a6a !important;
     }
-    .bot-message {
-        background-color: #ffffff;
-        border-left: 4px solid #4caf50;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-        color: #212121;
+    
+    /* Chat input styling - target all nested elements */
+    .stChatInputContainer {
+        background-color: #1a1a2e !important;
     }
-    .source-card {
-        background-color: #f8f9fa;
-        padding: 1rem;
-        border-radius: 0.3rem;
-        margin-top: 0.5rem;
-        border-left: 3px solid #ff9800;
-        color: #424242;
+    
+    .stChatInputContainer > div {
+        background-color: #3a3a4a !important;
     }
-    .source-card strong {
-        color: #1a1a1a;
+    
+    div[data-baseweb="textarea"],
+    div[data-baseweb="base-input"],
+    div[data-baseweb="textarea"] > div,
+    div[data-baseweb="base-input"] > div {
+        background-color: #3a3a4a !important;
     }
-    .source-card small {
-        color: #616161;
+    
+    /* Text area input field */
+    div[data-baseweb="textarea"] textarea {
+        background-color: #3a3a4a !important;
+        color: #ffffff !important;
     }
-    .source-card a {
-        color: #1976d2;
-        text-decoration: none;
-        font-weight: 500;
+    
+    div[data-baseweb="textarea"] textarea::placeholder {
+        color: #a0a0a0 !important;
     }
-    .source-card a:hover {
-        text-decoration: underline;
+    
+    /* Remove any border or padding that might show white */
+    div[data-baseweb="textarea"],
+    div[data-baseweb="base-input"] {
+        border: none !important;
     }
-    .github-link {
-        background-color: #24292e;
-        color: white !important;
-        padding: 0.5rem 1rem;
-        border-radius: 0.3rem;
-        text-decoration: none;
-        display: inline-block;
-        margin-top: 0.5rem;
+    
+    /* Target the inner div that contains the textarea */
+    [data-testid="stChatInput"] > div,
+    [data-testid="stChatInput"] > div > div,
+    [data-testid="stChatInput"] > div > div > div {
+        background-color: #3a3a4a !important;
     }
-    </style>
-    """, unsafe_allow_html=True)
+    
+    /* Footer styling */
+    footer {
+        background-color: #343541 !important;
+        color: #ffffff !important;
+    }
+    
+    footer * {
+        color: #ffffff !important;
+    }
+    
+    /* Bottom container with input field */
+    [data-testid="stBottomBlockContainer"] {
+        background-color: #343541 !important;
+    }
+    
+    .st-emotion-cache-i12q1z {
+        background-color: #343541 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 
-def initialize_conversational_chain():
-    """Initialize LangChain ConversationalRetrievalChain"""
+def initialize_llm():
+    """Initialize Azure OpenAI LLM"""
     try:
         Config.validate()
-        
-        # Initialize Azure Chat OpenAI
         llm = AzureChatOpenAI(
             azure_endpoint=Config.AZURE_OPENAI_ENDPOINT,
             api_key=Config.AZURE_OPENAI_API_KEY,
@@ -131,15 +155,14 @@ def initialize_conversational_chain():
             temperature=0.7,
             max_tokens=1000
         )
-        
         return llm
     except Exception as e:
-        st.error(f"Error initializing Azure OpenAI LLM: {e}")
+        st.error(f"Error initializing LLM: {e}")
         return None
 
 
 def initialize_vector_store():
-    """Initialize and load vector store"""
+    """Initialize vector store"""
     try:
         vector_store = VectorStore(
             azure_endpoint=Config.AZURE_OPENAI_ENDPOINT,
@@ -148,12 +171,11 @@ def initialize_vector_store():
             embedding_deployment=Config.AZURE_OPENAI_EMBEDDING_DEPLOYMENT
         )
         
-        # Check if index exists
         if os.path.exists(Config.FAISS_INDEX_PATH):
             vector_store.load_index(Config.FAISS_INDEX_PATH, Config.METADATA_PATH)
             return vector_store
         else:
-            st.warning("⚠️ Vector store not found. Please run `python setup_index.py` first to index your Confluence data.")
+            st.warning("⚠️ Vector store not found. Please run `python setup_index.py` first.")
             return None
             
     except Exception as e:
@@ -164,31 +186,13 @@ def initialize_vector_store():
 def initialize_agents(llm, vector_store, github_searcher, database_searcher):
     """Initialize multi-agent system"""
     try:
-        # Create tools
         confluence_tool = create_confluence_tool(vector_store)
         
-        # Create memories for each agent
-        confluence_memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True
-        )
+        confluence_memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+        github_memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+        database_memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+        supervisor_memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
         
-        github_memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True
-        )
-        
-        database_memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True
-        )
-        
-        supervisor_memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True
-        )
-        
-        # Create agents
         confluence_agent = create_confluence_agent(llm, confluence_tool, confluence_memory)
         
         github_agent = None
@@ -201,7 +205,6 @@ def initialize_agents(llm, vector_store, github_searcher, database_searcher):
             database_tool = create_database_tool(database_searcher)
             database_agent = create_database_agent(llm, database_tool, database_memory)
         
-        # Create supervisor
         supervisor = create_supervisor_agent(llm, confluence_agent, github_agent, database_agent, supervisor_memory)
         
         return {
@@ -223,28 +226,20 @@ def initialize_agents(llm, vector_store, github_searcher, database_searcher):
 
 
 def main():
-    # Header
-    st.title("🤖 AI Assistant")
-    st.markdown("Ask me anything - I can search Confluence docs, GitHub repos, and databases")
-    
     # Initialize session state
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = []
+    if 'messages' not in st.session_state:
+        st.session_state.messages = []
     
-    # Initialize LLM
     if 'llm' not in st.session_state:
-        st.session_state.llm = initialize_conversational_chain()
+        st.session_state.llm = initialize_llm()
     
-    # Initialize vector store
     if 'vector_store' not in st.session_state:
         st.session_state.vector_store = initialize_vector_store()
     
-    # Initialize conversation memory
     if 'memory' not in st.session_state:
         st.session_state.memory = ConversationBufferMemory(
             memory_key="chat_history",
-            return_messages=True,
-            output_key="answer"
+            return_messages=True
         )
     
     # Initialize GitHub searcher
@@ -255,20 +250,16 @@ def main():
         if github_token:
             try:
                 st.session_state.github_searcher = GitHubSearcher(github_token, github_org)
-                logger.info("GitHub searcher initialized successfully")
+                logger.info("GitHub searcher initialized")
             except Exception as e:
-                logger.warning(f"GitHub searcher initialization failed: {e}")
+                logger.warning(f"GitHub initialization failed: {e}")
                 st.session_state.github_searcher = None
         else:
-            logger.info("No GitHub token provided - GitHub search disabled")
             st.session_state.github_searcher = None
     
     # Initialize Database searcher
     if 'database_searcher' not in st.session_state:
-        if not DATABASE_AVAILABLE:
-            logger.info("Database module not available - Database search disabled")
-            st.session_state.database_searcher = None
-        else:
+        if DATABASE_AVAILABLE:
             db_server = Config.AZURE_SQL_SERVER
             db_database = Config.AZURE_SQL_DATABASE
             db_username = Config.AZURE_SQL_USERNAME
@@ -282,15 +273,16 @@ def main():
                         username=db_username,
                         password=db_password
                     )
-                    logger.info("Database searcher initialized successfully")
+                    logger.info("Database searcher initialized")
                 except Exception as e:
-                    logger.warning(f"Database searcher initialization failed: {e}")
+                    logger.warning(f"Database initialization failed: {e}")
                     st.session_state.database_searcher = None
             else:
-                logger.info("No database credentials provided - Database search disabled")
                 st.session_state.database_searcher = None
+        else:
+            st.session_state.database_searcher = None
     
-    # Initialize multi-agent system
+    # Initialize agents
     if 'agents' not in st.session_state and st.session_state.vector_store and st.session_state.llm:
         st.session_state.agents = initialize_agents(
             st.session_state.llm,
@@ -299,163 +291,60 @@ def main():
             st.session_state.database_searcher
         )
     
-    # Check if initialization was successful
+    # Check initialization
     if not st.session_state.llm or not st.session_state.vector_store or not st.session_state.get('agents'):
         st.error("❌ Failed to initialize. Please check your configuration.")
         st.stop()
     
-    # Chat container
-    chat_container = st.container()
-    
-    # Display chat history
-    with chat_container:
-        for message in st.session_state.chat_history:
-            if message['role'] == 'user':
-                st.markdown(f"""
-                <div class="chat-message user-message">
-                    <strong>You:</strong><br>
-                    {message['content']}
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div class="chat-message bot-message">
-                    <strong>AI Assistant:</strong><br>
-                    {message['content']}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Display sources if available
-                if 'sources' in message and message['sources']:
-                    st.markdown("**📚 Confluence Sources:**")
-                    for source in message['sources'][:3]:  # Show top 3 sources
-                        st.markdown(f"""
-                        <div class="source-card">
-                            <strong>{source['title']}</strong> ({source['type']}) - {source['space']}<br>
-                            <small>Relevance: {source['relevance_score']:.2%}</small><br>
-                            <a href="{source['url']}" target="_blank">View in Confluence →</a>
-                        </div>
-                        """, unsafe_allow_html=True)
-                
-                # Display GitHub repositories if available
-                if 'github_repos' in message and message['github_repos']:
-                    st.markdown("**🔗 Relevant GitHub Repositories:**")
-                    for repo in message['github_repos']:
-                        st.markdown(f"""
-                        <div class="source-card" style="border-left: 3px solid #24292e;">
-                            <strong>⭐ {repo['name']}</strong> ({repo['stars']} stars)<br>
-                            <p>{repo['description']}</p>
-                            <small>Language: {repo['language']} | Topics: {', '.join(repo['topics'][:5])}</small><br>
-                            <a href="{repo['url']}" target="_blank" style="color: #1976d2;">View Repository →</a>
-                        </div>
-                        """, unsafe_allow_html=True)
-                
-                # Display additional GitHub links if available
-                if 'github_links' in message and message['github_links']:
-                    # Filter out repos already shown
-                    shown_repos = [repo['url'] for repo in message.get('github_repos', [])]
-                    additional_links = [link for link in message['github_links'] if link not in shown_repos]
-                    
-                    if additional_links:
-                        st.markdown("**🔗 Additional GitHub Links:**")
-                        for link in additional_links:
-                            st.markdown(f"- [{link}]({link})")
-    
-    # Input section at the bottom
-    st.markdown("---")
-    
-    # Query input
-    st.markdown('<p style="font-size: 14px; color: #424242; margin-bottom: 5px;">Ask your question:</p>', unsafe_allow_html=True)
-    with st.form(key='query_form', clear_on_submit=True):
-        query = st.text_input(
-            "Query",
-            placeholder="e.g., How do I configure the authentication service?",
-            label_visibility="collapsed",
-            key="user_query_input"
-        )
-        submit_button = st.form_submit_button("🚀 Send", use_container_width=True)
-    
-    # Process query
-    if submit_button and query:
-        # Add user message to chat history
-        st.session_state.chat_history.append({
-            'role': 'user',
-            'content': query
-        })
-        
-        # Show loading spinner
-        with st.spinner("🤖 AI Agents are searching..."):
-            try:
-                # Use supervisor agent to coordinate search
-                supervisor = st.session_state.agents['supervisor']
-                
-                # Run supervisor (it will coordinate Confluence, GitHub, and Database agents)
-                result = asyncio.run(supervisor(query))
-                
-                response = result.get('answer', 'No answer generated.')
-                confluence_used = result.get('confluence_used', False)
-                github_used = result.get('github_used', False)
-                database_used = result.get('database_used', False)
-                
-                # Extract sources and GitHub links from response
-                sources = []
-                github_repos = []
-                github_links = extract_github_urls(response)
-                
-                # Add agent info to response
-                agent_info = []
-                if confluence_used:
-                    agent_info.append("📚 Confluence Agent")
-                if github_used:
-                    agent_info.append("🐙 GitHub Agent")
-                if database_used:
-                    agent_info.append("💾 Database Agent")
-                
-                if agent_info:
-                    response = f"*Consulted: {', '.join(agent_info)}*\n\n{response}"
-                
-            except Exception as e:
-                logger.error(f"Error with agent system: {e}")
-                response = f"Error generating response: {str(e)}"
-                sources = []
-                github_links = []
-                github_repos = []
-            
-            # Add bot response to chat history
-            st.session_state.chat_history.append({
-                'role': 'assistant',
-                'content': response,
-                'sources': sources if 'sources' in locals() else [],
-                'github_links': github_links if 'github_links' in locals() else [],
-                'github_repos': github_repos if 'github_repos' in locals() else []
-            })
-        
-        # Rerun to update the display
-        st.rerun()
-    
     # Sidebar
     with st.sidebar:
-        st.header("ℹ️ About")
-        st.markdown("""
-        Your intelligent assistant with access to:
+        st.title("💬 AI Assistant")
+        st.divider()
         
-        📚 **Confluence** - Documentation & PDFs
+        st.markdown("### 📚 Data Sources")
+        st.markdown("- Confluence")
+        st.markdown("- GitHub")
+        st.markdown("- Database")
         
-        🐙 **GitHub** - Repositories & Code
+        st.divider()
         
-        💾 **Database** - Structured data
-        """)
-        
-        st.markdown("---")
-        
-        # Clear chat button
-        if st.button("🗑️ Clear Chat History", use_container_width=True):
-            st.session_state.chat_history = []
-            # Clear all agent memories
+        if st.button("🗑️ Clear Chat", use_container_width=True):
+            st.session_state.messages = []
             if st.session_state.get('agents'):
                 for memory in st.session_state.agents['memories'].values():
                     memory.clear()
             st.rerun()
+        
+        st.divider()
+        st.caption(f"💬 {len(st.session_state.messages)//2} conversations")
+    
+    # Display chat messages using Streamlit's native chat
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    
+    # Chat input - automatically stays at bottom
+    if prompt := st.chat_input("Send a message..."):
+        # Add user message
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        
+        # Get response
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                try:
+                    supervisor = st.session_state.agents['supervisor']
+                    result = asyncio.run(supervisor(prompt))
+                    response = result.get('answer', 'No answer generated.')
+                except Exception as e:
+                    logger.error(f"Error: {e}")
+                    response = f"Error: {str(e)}"
+            
+            st.markdown(response)
+        
+        # Add assistant message
+        st.session_state.messages.append({"role": "assistant", "content": response})
 
 
 if __name__ == "__main__":
