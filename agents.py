@@ -187,7 +187,7 @@ SQL: SELECT COUNT(*) as ActiveUsers FROM Users WHERE Status = 'Active'
 
 def create_supervisor_agent(llm: AzureChatOpenAI, confluence_agent, github_agent, database_agent, memory: ConversationBufferMemory):
     """
-    Create supervisor agent that coordinates between Confluence, GitHub, and Database agents
+    Create supervisor agent that runs all agents in parallel and merges results
     
     Args:
         llm: Azure OpenAI LLM instance
@@ -197,137 +197,188 @@ def create_supervisor_agent(llm: AzureChatOpenAI, confluence_agent, github_agent
         memory: Conversation memory
         
     Returns:
-        Supervisor function that routes queries
+        Supervisor function that orchestrates parallel execution
     """
     
     async def supervisor(query: str) -> dict:
         """
-        Route query to appropriate agent(s) based on context
+        Run all agents in parallel and merge results
         
         Args:
             query: User query
             
         Returns:
-            Dict with answer and sources
+            Dict with combined answer and usage flags
         """
+        import asyncio
+        
         try:
-            # Detect query type based on keywords
-            query_lower = query.lower()
+            logger.info(f"Running all agents in parallel for query: {query}")
             
-            # Database query indicators
-            database_keywords = [
-                'count', 'how many', 'total', 'sum', 'average', 'list all',
-                'show me', 'database', 'table', 'records', 'rows',
-                'select', 'query', 'sql', 'customers', 'users', 'orders',
-                'data from', 'in the database'
-            ]
+            # Define async wrappers for each agent
+            async def query_confluence():
+                """Query Confluence agent"""
+                try:
+                    if not confluence_agent:
+                        return None
+                    result = await asyncio.to_thread(confluence_agent.invoke, {"input": query})
+                    output = result.get('output', '')
+                    logger.info(f"Confluence returned {len(output)} characters")
+                    
+                    # Check if result has relevant information
+                    insufficient_phrases = [
+                        'no relevant information',
+                        'not found',
+                        'did not return',
+                        'no specific information',
+                        'could not find'
+                    ]
+                    
+                    has_content = (
+                        output and 
+                        len(output.strip()) > 50 and
+                        not any(phrase in output.lower() for phrase in insufficient_phrases)
+                    )
+                    
+                    return output if has_content else None
+                except Exception as e:
+                    logger.error(f"Confluence agent error: {e}")
+                    return None
             
-            is_database_query = any(keyword in query_lower for keyword in database_keywords)
+            async def query_github():
+                """Query GitHub agent"""
+                try:
+                    if not github_agent:
+                        return None
+                    result = await asyncio.to_thread(github_agent.invoke, {"input": query})
+                    output = result.get('output', '')
+                    logger.info(f"GitHub returned {len(output)} characters")
+                    
+                    # Check if result has relevant information
+                    insufficient_phrases = [
+                        'no relevant',
+                        'not found',
+                        'could not find',
+                        'no repositories'
+                    ]
+                    
+                    has_content = (
+                        output and 
+                        len(output.strip()) > 50 and
+                        not any(phrase in output.lower() for phrase in insufficient_phrases)
+                    )
+                    
+                    return output if has_content else None
+                except Exception as e:
+                    logger.error(f"GitHub agent error: {e}")
+                    return None
             
-            # If it's clearly a database query but no database agent available
-            if is_database_query and not database_agent:
-                return {
-                    'answer': "This appears to be a database query, but the database connection is not configured.\n\n"
-                             "To enable database queries:\n"
-                             "1. Install ODBC Driver 18 for SQL Server\n"
-                             "2. Configure database credentials in .env file:\n"
-                             "   - AZURE_SQL_SERVER\n"
-                             "   - AZURE_SQL_DATABASE\n"
-                             "   - AZURE_SQL_USERNAME\n"
-                             "   - AZURE_SQL_PASSWORD\n"
-                             "3. Restart the application\n\n"
-                             "For now, I can only search Confluence documentation and GitHub repositories.",
-                    'confluence_used': False,
-                    'github_used': False,
-                    'database_used': False
-                }
+            async def query_database():
+                """Query Database agent"""
+                try:
+                    if not database_agent:
+                        return None
+                    result = await asyncio.to_thread(database_agent.invoke, {"input": query})
+                    output = result.get('output', '')
+                    logger.info(f"Database returned {len(output)} characters")
+                    
+                    # Check if query was successful
+                    error_phrases = [
+                        'error', 
+                        'failed', 
+                        'cannot', 
+                        'unable',
+                        'no tables found',
+                        'not available'
+                    ]
+                    
+                    has_content = (
+                        output and 
+                        len(output.strip()) > 50 and
+                        not any(phrase in output.lower() for phrase in error_phrases)
+                    )
+                    
+                    return output if has_content else None
+                except Exception as e:
+                    logger.error(f"Database agent error: {e}")
+                    return None
             
-            # If it's clearly a database query, try database first
-            if is_database_query and database_agent:
-                logger.info("Detected database query. Querying Database agent first...")
-                database_result = database_agent.invoke({"input": query})
-                database_output = database_result.get('output', '')
-                logger.info(f"Database agent returned {len(database_output)} characters")
-                
-                # Check if database query was successful
-                error_phrases = ['error', 'failed', 'cannot', 'unable']
-                if database_output and not any(phrase in database_output.lower() for phrase in error_phrases):
-                    return {
-                        'answer': database_output,
-                        'confluence_used': False,
-                        'github_used': False,
-                        'database_used': True
-                    }
-            
-            # First, try Confluence agent
-            logger.info("Querying Confluence agent...")
-            confluence_result = confluence_agent.invoke({"input": query})
-            confluence_output = confluence_result.get('output', '')
-            
-            # Check if Confluence found sufficient information
-            insufficient_phrases = [
-                'no relevant information',
-                'not found',
-                'did not return',
-                'no specific information',
-                'could not find',
-                'not seem related',
-                'refine the search',
-                'provide more details'
-            ]
-            
-            is_insufficient = (
-                any(phrase in confluence_output.lower() for phrase in insufficient_phrases) or
-                len(confluence_output.strip()) < 100
+            # Run all agents in parallel
+            results = await asyncio.gather(
+                query_confluence(),
+                query_github(),
+                query_database(),
+                return_exceptions=True
             )
             
-            logger.info(f"Confluence result length: {len(confluence_output)}, is_insufficient: {is_insufficient}")
+            confluence_output, github_output, database_output = results
             
-            github_output = ""
-            database_output = ""
+            # Handle exceptions
+            if isinstance(confluence_output, Exception):
+                logger.error(f"Confluence exception: {confluence_output}")
+                confluence_output = None
+            if isinstance(github_output, Exception):
+                logger.error(f"GitHub exception: {github_output}")
+                github_output = None
+            if isinstance(database_output, Exception):
+                logger.error(f"Database exception: {database_output}")
+                database_output = None
             
-            if is_insufficient and github_agent:
-                # Query GitHub agent as fallback
-                logger.info("Confluence results insufficient. Querying GitHub agent...")
-                github_result = github_agent.invoke({"input": query})
-                github_output = github_result.get('output', '')
-                logger.info(f"GitHub agent returned {len(github_output)} characters")
-                
-                # Check if GitHub also insufficient
-                is_github_insufficient = (
-                    any(phrase in github_output.lower() for phrase in insufficient_phrases) or
-                    len(github_output.strip()) < 100
-                )
-                
-                if is_github_insufficient and database_agent:
-                    # Query Database agent as final fallback
-                    logger.info("GitHub results also insufficient. Querying Database agent...")
-                    database_result = database_agent.invoke({"input": query})
-                    database_output = database_result.get('output', '')
-                    logger.info(f"Database agent returned {len(database_output)} characters")
-            
-            # Combine results
+            # Collect valid outputs
             outputs = []
-            if confluence_output and not is_insufficient:
+            if confluence_output:
                 outputs.append(("Confluence Documentation", confluence_output))
             if github_output:
                 outputs.append(("GitHub Repositories", github_output))
             if database_output:
                 outputs.append(("Database", database_output))
             
-            if outputs:
-                if len(outputs) == 1:
-                    combined_answer = outputs[0][1]
-                else:
-                    combined_answer = "Based on available sources:\n\n"
+            # Merge results using LLM orchestrator
+            if len(outputs) == 0:
+                combined_answer = "I couldn't find relevant information from any of the available sources (Confluence, GitHub, or Database)."
+            elif len(outputs) == 1:
+                # Single source - return as is
+                combined_answer = outputs[0][1]
+            else:
+                # Multiple sources - use LLM to merge intelligently
+                logger.info(f"Merging results from {len(outputs)} sources using LLM orchestrator")
+                
+                merge_prompt = f"""You are an orchestrator agent that merges information from multiple sources.
+
+User Query: {query}
+
+Available Information:
+"""
+                for source_name, content in outputs:
+                    merge_prompt += f"\n--- From {source_name} ---\n{content}\n"
+                
+                merge_prompt += """
+Instructions:
+1. Synthesize the information from all sources into a coherent, comprehensive answer
+2. Remove duplicate information
+3. Organize the answer logically
+4. If sources conflict, mention the discrepancy
+5. Cite which source each piece of information came from
+6. Keep it concise but complete
+
+Provide the final merged answer:"""
+                
+                try:
+                    orchestrator_response = await asyncio.to_thread(
+                        llm.invoke,
+                        merge_prompt
+                    )
+                    combined_answer = orchestrator_response.content
+                except Exception as e:
+                    logger.error(f"Orchestrator merge error: {e}")
+                    # Fallback to simple concatenation
+                    combined_answer = "**Combined Information from Multiple Sources:**\n\n"
                     for source_name, content in outputs:
                         combined_answer += f"**From {source_name}:**\n{content}\n\n"
-            else:
-                combined_answer = "I couldn't find relevant information in Confluence, GitHub repositories, or the database."
             
             return {
                 'answer': combined_answer,
-                'confluence_used': bool(confluence_output and not is_insufficient),
+                'confluence_used': bool(confluence_output),
                 'github_used': bool(github_output),
                 'database_used': bool(database_output)
             }
@@ -337,7 +388,8 @@ def create_supervisor_agent(llm: AzureChatOpenAI, confluence_agent, github_agent
             return {
                 'answer': f"Error processing query: {str(e)}",
                 'confluence_used': False,
-                'github_used': False
+                'github_used': False,
+                'database_used': False
             }
     
     return supervisor
