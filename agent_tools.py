@@ -54,12 +54,11 @@ class ConfluenceSearchTool(BaseTool):
                 logger.info(f"Result {i}: {result['title']} (space: {result['space']}, relevance: {result['relevance_score']:.2%})")
                 logger.info(f"  Content preview: {result['text'][:200]}...")
             
-            # Format results with content and GitHub links
+            # Format results with GitHub links
             output = "Confluence Documentation:\n\n"
             for i, result in enumerate(results[:3], 1):
                 output += f"{i}. **{result['title']}**\n"
-                output += f"   {result['text'][:500]}\n"
-                output += f"   Source: {result['url']}\n\n"
+                output += f"   {result['text'][:500]}\n\n"
             
             # Add GitHub links if found
             if all_github_urls:

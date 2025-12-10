@@ -6,6 +6,7 @@ from PyPDF2 import PdfReader
 from io import BytesIO
 from typing import List, Dict
 import logging
+from urllib.parse import quote
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -146,6 +147,8 @@ class ConfluenceDataFetcher:
                 page_text = self.extract_text_from_page(full_page)
                 
                 # Create document entry
+                # Use proper URL encoding for page title
+                encoded_title = quote(page_title, safe='')
                 doc = {
                     'id': page_id,
                     'title': page_title,
@@ -153,7 +156,7 @@ class ConfluenceDataFetcher:
                     'space': space_name,
                     'space_key': space_key,
                     'type': 'page',
-                    'url': f"{self.confluence_url}/wiki/spaces/{space_key}/pages/{page_id}"
+                    'url': f"{self.confluence_url}/wiki/spaces/{space_key}/pages/{page_id}/{encoded_title}"
                 }
                 all_documents.append(doc)
                 
