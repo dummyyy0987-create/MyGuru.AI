@@ -186,10 +186,10 @@ def initialize_agents(llm, vector_store, github_searcher, database_searcher):
             database_tool = create_database_tool(database_searcher)
             database_agent = create_database_agent(llm, database_tool, database_memory)
 
-        # Supervisor Agent (only GitHub + Database)
+        # Supervisor Agent (Confluence + GitHub + Database)
         supervisor = create_supervisor_agent(
             llm,
-            None,            # No confluence agent
+            confluence_agent,
             github_agent,
             database_agent,
             supervisor_memory

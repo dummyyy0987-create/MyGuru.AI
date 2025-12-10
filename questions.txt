@@ -1,0 +1,30 @@
+“Can you explain how the systems that manage product availability and store operations coordinate with each other? Share any reference material that describes this interaction in detail.”
+
+
+“I want to understand what technical components support all our microservices in the cloud. Can you point me to any documentation that outlines the setup and shows what resources we rely on?”
+
+
+“We are planning to roll out a new service that predicts stock shortages for each store. What steps would our platform follow to prepare for this, and where can I read more about similar deployments?”
+
+
+“If I want to know how store information connects with product levels or stock counts, where can I find descriptions of how these relationships are stored and managed?”
+
+
+“Could you show me where I can see the history of changes or updates made to our store-related services? I want to track when previous releases happened.”
+
+
+“How does the platform keep sensitive information secure for the applications that manage retail operations? Please guide me to any documentation that explains this process.”
+
+
+“I need an overview of the different services we have across stores and inventory, along with how they are structured. Where can I explore this?”
+
+
+“I’m looking for any reference that shows how requests about store details, stock levels, or infrastructure information are handled. Can you point me in the right direction?”
+
+
+“How does our monitoring or health-check process work for the systems that support retail operations? Any documentation or diagrams would be helpful.”
+
+
+“When a new application goes live, how does our platform decide how much capacity it needs and how it should scale? Where can I read more about this?”
+
+explain the deployment of microservices on cloud and also provide some links for further exploration.

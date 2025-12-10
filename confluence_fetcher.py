@@ -153,7 +153,7 @@ class ConfluenceDataFetcher:
                     'space': space_name,
                     'space_key': space_key,
                     'type': 'page',
-                    'url': f"{self.confluence_url}/wiki/spaces/{space_key}/pages/{page_id}"
+                    'url': f"{self.confluence_url}/spaces/{space_key}/pages/{page_id}"
                 }
                 all_documents.append(doc)
                 
@@ -173,7 +173,7 @@ class ConfluenceDataFetcher:
                                 'space_key': space_key,
                                 'type': 'pdf',
                                 'parent_page': page_title,
-                                'url': f"{self.confluence_url}/wiki{attachment.get('_links', {}).get('webui', '')}"
+                                'url': f"{self.confluence_url}{attachment.get('_links', {}).get('webui', '')}"
                             }
                             all_documents.append(pdf_doc)
         
