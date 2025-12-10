@@ -16,3 +16,4 @@ vector_store/
 *.pkl
 .streamlit/
 *.log
+h.txt

@@ -86,14 +86,14 @@ class GitHubSearchInput(BaseModel):
 class GitHubSearchTool(BaseTool):
     """Tool for searching GitHub repositories"""
     name: str = "github_search"
-    description: str = """Useful for searching GitHub repositories, README files, and code documentation.
+    description: str = """Useful for searching GitHub repositories with full README content and repository URLs.
     Use this tool when the user asks about:
-    - Code examples
-    - Open source projects
-    - Repository information
-    - Implementation details in code
-    - When Confluence documentation is insufficient
-    Input should be a search query string."""
+    - Code examples and implementations
+    - Open source projects and their details
+    - Repository information with README content
+    - Implementation details and usage instructions
+    - Code repositories and their documentation
+    Input should be a search query string to find relevant repositories."""
     args_schema: type[BaseModel] = GitHubSearchInput
     github_searcher: object = None
     
@@ -105,26 +105,36 @@ class GitHubSearchTool(BaseTool):
                 return "GitHub search is not available. Please configure GITHUB_TOKEN."
             
             # Search repositories
-            repos = self.github_searcher.search_repositories(query, max_results=3)
+            repos = self.github_searcher.search_repositories(query, max_results=5)
             logger.info(f"GitHub Tool found {len(repos)} repositories")
             
             if not repos:
                 logger.info("GitHub Tool: No repositories found")
                 return "No relevant GitHub repositories found in your accessible repos."
             
-            # Format results
-            output = "Found the following relevant GitHub repositories:\n\n"
+            # Format results with README content and repository URLs
+            output = "## Found the following relevant GitHub repositories:\n\n"
             for i, repo in enumerate(repos, 1):
                 logger.info(f"GitHub Repo {i}: {repo['name']} (stars: {repo['stars']}, score: {repo.get('score', 0)})")
                 logger.info(f"  Description: {repo['description']}")
                 logger.info(f"  README length: {len(repo['readme'])} chars")
-                output += f"{i}. **{repo['name']}** ({repo['stars']} ⭐)\n"
-                output += f"   Description: {repo['description']}\n"
-                output += f"   Language: {repo['language']}\n"
-                output += f"   Topics: {', '.join(repo['topics'][:5])}\n"
-                output += f"   README Preview: {repo['readme'][:400]}...\n"
-                output += f"   URL: {repo['url']}\n"
-                output += f"   Private: {repo.get('private', False)}\n\n"
+                
+                output += f"### {i}. {repo['name']} ({repo['stars']} ⭐)\n"
+                output += f"**Repository URL:** {repo['url']}\n\n"
+                output += f"**Description:** {repo['description']}\n\n"
+                output += f"**Language:** {repo['language']}\n"
+                output += f"**Topics:** {', '.join(repo['topics'][:5]) if repo['topics'] else 'No topics'}\n\n"
+                
+                # Include README content if available
+                if repo['readme'] and repo['readme'] != "No README available":
+                    output += f"**README Content Preview:**\n"
+                    output += f"```\n{repo['readme'][:600]}\n```\n\n"
+                else:
+                    output += f"**README:** Not available\n\n"
+                
+                output += f"**Private Repository:** {repo.get('private', False)}\n"
+                output += f"**Last Updated:** {repo.get('updated_at', 'Unknown')}\n"
+                output += "\n---\n\n"
             
             return output
             
